@@ -9,6 +9,7 @@ import {
   useRequestDisplayMode,
   useIsChatGptApp,
 } from "./hooks";
+import { SignIn } from "@clerk/nextjs";
 
 export default function Home() {
   const toolOutput = useWidgetProps<{
@@ -123,6 +124,7 @@ export default function Home() {
             Deploy on Vercel
           </a>
         </div>
+        
       </main>
     </div>
   );

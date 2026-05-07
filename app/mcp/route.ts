@@ -1,4 +1,5 @@
 import { baseURL } from "@/baseUrl";
+import { lurnaMcpRequestStore } from "@/lib/lurna-mcp-request-context";
 import {
   lurnaBackendRequest,
   lurnaPathFlashcards,
@@ -122,8 +123,14 @@ function widgetMeta(widget: ContentWidget) {
   } as const;
 }
 
-const handler = createMcpHandler(async (server) => {
-  const html = await getAppsSdkCompatibleHtml(baseURL, "/");
+function parseInboundBearer(authorization: string | null): string | null {
+  if (!authorization) return null;
+  const m = authorization.match(/^Bearer\s+(\S+)/i);
+  return m?.[1]?.trim() ?? null;
+}
+
+const innerHandler = createMcpHandler(async (server) => {
+  const html = await getAppsSdkCompatibleHtml(baseURL, "/widget");
 
   const contentWidget: ContentWidget = {
     id: "show_content",
@@ -288,5 +295,10 @@ const handler = createMcpHandler(async (server) => {
   });
 });
 
-export const GET = handler;
-export const POST = handler;
+async function mcpRoute(request: Request): Promise<Response> {
+  const bearerToken = parseInboundBearer(request.headers.get("authorization"));
+  return lurnaMcpRequestStore.run({ bearerToken }, () => innerHandler(request));
+}
+
+export const GET = mcpRoute;
+export const POST = mcpRoute;

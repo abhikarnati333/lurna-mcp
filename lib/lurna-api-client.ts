@@ -1,5 +1,7 @@
 /** Server-side bridge to https://api.lurna.co (or `LURNA_API_BASE_URL`). */
 
+import { resolveLurnaUpstreamAuthHeaders } from "./lurna-outbound-auth";
+
 export function normalizePath(path: string): string {
   const p = path.trim();
   if (!p.startsWith("/")) return `/${p}`;
@@ -34,20 +36,6 @@ function assertPathAllowed(normalizedPath: string): string | undefined {
   return `Path "${normalizedPath}" is not allowed by LURNA_PATH_ALLOWLIST (allowed prefixes: ${prefixes.join(", ")}).`;
 }
 
-function authHeaders(): Record<string, string> {
-  const headers: Record<string, string> = {};
-  const token =
-    process.env.LURNA_API_BEARER_TOKEN?.trim() ||
-    process.env.LURNA_API_KEY?.trim();
-  if (token) headers.Authorization = `Bearer ${token}`;
-
-  const customName = process.env.LURNA_API_AUTH_HEADER?.trim();
-  const customValue = process.env.LURNA_API_AUTH_VALUE?.trim();
-  if (customName && customValue) headers[customName] = customValue;
-
-  return headers;
-}
-
 function buildQuery(search: Record<string, string>): string {
   const q = new URLSearchParams(search);
   const s = q.toString();
@@ -69,6 +57,14 @@ export async function lurnaBackendRequest(options: {
   const denied = assertPathAllowed(pathNorm);
   if (denied) return { ok: false, error: denied };
 
+  let upstreamAuth: Record<string, string>;
+  try {
+    upstreamAuth = await resolveLurnaUpstreamAuthHeaders();
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { ok: false, error: msg };
+  }
+
   const base = getBaseUrl();
   const queryStr = options.query ? buildQuery(options.query) : "";
   const url = `${base}${pathNorm}${queryStr}`;
@@ -76,7 +72,7 @@ export async function lurnaBackendRequest(options: {
   const method = options.method.toUpperCase();
   const headers: Record<string, string> = {
     Accept: "application/json",
-    ...authHeaders(),
+    ...upstreamAuth,
   };
 
   let body: BodyInit | undefined;
